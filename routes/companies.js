@@ -21,20 +21,26 @@ router.get("/", async function(req, res, next) {
 router.get("/:code", async function(req, res, next) {
     try {
         const results = await db.query(
-            `SELECT c.code, c.name, c.description, i.id 
+            `SELECT c.code, c.name, c.description, i.id, industry.field 
                 FROM companies AS c
-                JOIN invoices AS i
-                ON c.code = i.comp_code
-                WHERE code=$1`, [req.params.code]);
-        
+                    LEFT JOIN invoices AS i
+                    ON c.code = i.comp_code
+                JOIN industries_companies AS ic
+                    ON ic.company_code = c.code
+                JOIN industries AS industry
+                    ON industry.code = ic.industry_code
+                WHERE c.code = $1`
+                ,[req.params.code]);
+
         if (results.rows.length === 0){
             throw new ExpressError("Company cannot be found", 404);
         }
 
         let { code, name, description } = results.rows[0];
         let invoices = results.rows.map(entry => entry.id);
+        let industries = results.rows.map(entry => entry.field);
 
-        return res.json({company: { code, name, description, invoices }});
+        return res.json({company: { code, name, description, invoices, industries }});
 
     } catch(err){
         return next(err);
@@ -93,10 +99,10 @@ router.put("/:code", async function(req, res, next) {
 
         const results = await db.query(
             `UPDATE companies
-            SET name = $1, description = $2
-            WHERE code = $3
-            RETURNING code, name, description`,
-            [name, description, req.params.code]
+                SET name = $1, description = $2
+                WHERE code = $3
+                RETURNING code, name, description`,
+                [name, description, req.params.code]
         );
 
         if (results.rows.length === 0){
